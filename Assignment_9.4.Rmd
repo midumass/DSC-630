@@ -1,0 +1,54 @@
+---
+title: Assignment 9.4 - Predictive Probabilities
+output: word_document
+number_sections: true
+author: 
+- Zach Hill
+header-includes:
+    - \usepackage{setspace}\doublespacing
+    - \usepackage{float}
+abstract: \singlespacing Calculate the probability of a model ensemble that uses simple majority voting making an incorrect prediction in the following scenarios. (Hint:\s Understanding how to use the binomial distribution will be useful in answering this question.)
+keywords: "My keywords"
+date: "`r format(Sys.time(), '%B %d, %Y')`"
+geometry: margin=1in
+fontsize: 12pt
+fig_caption: yes
+indent: true
+---
+
+```{r include = FALSE}
+options(scipen=999)
+```
+
+## Binomial Distribution
+
+Given the formula below, one can predict the likelihood of an event occurring given the probability of success (or failure, as 1-success), number of attempts (if the attempts are independent), and the number of attempts resulting in a success.
+
+<center>
+![Binomial Distribution Formula](./probability-distributions.png)
+</center>
+
+We can use this to find the probability (or p-value) of each circumstance below, then subtract that value from 1 to find the probability in question.
+
+#### 1. The ensemble contains 11 independent models, all of which have an error rate of 0.2.
+```{r}
+p1 <- dbinom(11, size = 11, prob = .8)
+```
+
+With a p-value of `r p1`, there is a `r round((1 - p1) * 100, 2)`% chance of an incorrect prediction being made. 
+
+
+
+#### 2. The ensemble contains 11 independent models, all of which have an error rate of 0.49.
+```{r}
+p2 <- dbinom(11, size = 11, p = .51)
+```
+
+With a p-value of `r p2`, there is a `r round((1 - p2) * 100, 2)`% chance of an incorrect prediction being made. 
+
+#### 3. The ensemble contains 21 independent models, all of which have an error rate of 0.49.
+```{r}
+p3 <- dbinom(21, size = 21, p = .51)
+```
+
+With a p-value of `r p3`, there is a `r round((1 - p3) * 100, 2)`% chance of an incorrect prediction being made. Of course there is never really a 100% chance, but theres only a `r p3`% chance of all predictions being correct.

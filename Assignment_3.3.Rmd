@@ -1,0 +1,192 @@
+---
+title: "Assignment_3.3"
+author: "Zach Hill"
+date: "September 14, 2019"
+output:
+  pdf_document: default
+  html_document:
+    df_print: paged
+---
+
+
+```{r libraries, echo = FALSE, warning = FALSE, message = FALSE}
+library(tidyverse)
+library(ggplot2)
+library(GGally)
+library(gridExtra)
+library(dataPreparation)
+```
+
+```{r loading_data}
+data <- read.csv('dodgers.csv')
+```
+### Data Understanding
+
+```{r}
+head(data)
+```
+```{r}
+str(data)
+```
+With so many variables, it might be best to narrow down those which might be most relevant. Temp, for instance, would roughly correlate to month and day or night. Both month and day or night, however, wouldn't really be affected by temp so temp can likely be left out. Day of Week would certainly be relevant as people need to be off work to attend. The opponent would certainly be of interest. The promotion data would likely have some relevance but the individual type of promotion might not be. It might be best to start with a generic yes or no on the condition of whether a promo was run.
+
+### Data Preparation
+
+Months and days of the week need to be converted to ordered factors for human readability. A column has been added which accounts for any one of the four promotions being offered, in case there is no discrepancy between promotions.
+```{r}
+data$month <- ordered(data$month, levels = c("APR", 
+                                             "MAY", 
+                                             "JUN", 
+                                             "JUL", 
+                                             "AUG", 
+                                             "SEP", 
+                                             "OCT"))
+
+data$day_of_week <- ordered(data$day_of_week, levels = c("Monday", 
+                                                         "Tuesday", 
+                                                         "Wednesday", 
+                                                         "Thursday", 
+                                                         "Friday", 
+                                                         "Saturday", 
+                                                         "Sunday"))
+
+data$promo <- as.factor(ifelse(data$cap == "YES"|
+                       data$shirt == "YES"|
+                       data$fireworks == "YES"|
+                       data$bobblehead == "YES", 
+                     TRUE, FALSE))
+```
+### EDA
+
+Checking attendance numbers. If we are to increase attendance on low-attendance days, it would help to have a baseline
+```{r attend}
+dp_att <- ggplot(data, aes(x = attend)) + geom_density()
+dp_att
+```
+
+Having knowledge of how much data we have in certain categories will help us in deciding which factors have more weight or are more reliable.
+```{r barplots}
+bar_mon <- ggplot(data, aes(x = month)) + geom_bar()
+bar_dow <- ggplot(data, aes(x = day_of_week)) + geom_bar() + theme(axis.text.x = element_text(angle = 45, hjust = 1))
+bar_sky <- ggplot(data, aes(x = skies)) + geom_bar()
+bar_tod <- ggplot(data, aes(x = day_night)) + geom_bar()
+bar_pro <- ggplot(data, aes(x = promo)) + geom_bar()
+bar_dow_pro <- bar_dow+ (aes(fill = promo)) + geom_bar()
+
+grid.arrange(bar_mon, bar_dow, bar_sky, bar_tod, bar_pro, bar_dow_pro, ncol = 2)
+```
+
+More games were played in May than any other month which may skew analysis. Games were well distributed across the days of the week except Thursdays, which should aid in reliable results. Most games were played on clear nights as well which might not provide enough data for day games or days it wasn't clear. Due to the nature of the skies factor being only cloudy or clear, we don't actually know if a game was in the rain. Since Dodger Stadium is open-air, this might be important. Most nights no promotion was offered but every Friday night was a promotional night. 
+
+```{r boxplots}
+box_mon <- ggplot(data, aes(x = month, y = attend)) + geom_boxplot()
+box_dow <- ggplot(data, aes(x = day_of_week, y = attend)) + geom_boxplot() + 
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+box_sky <- ggplot(data, aes(x = skies, y = attend)) + geom_boxplot()
+box_tod <- ggplot(data, aes(x = day_night, y = attend)) + geom_boxplot()
+
+grid.arrange(box_mon, box_dow, box_sky, box_tod)
+```
+
+Despite having the most games played, attendance in May was actually quite low. Other factors likely played a roll in this, such as the opponents and the days of the week the games were played. Tuesdays seem to have the highest average attendance and since the games played during the week were evenly distributed this is relevant. Upon closer examination though we see Tuesdays were often promotional nights which could explain the higher numbers. The lowest attendance numbers came on Mondays, with very little variance in the numbers making this, too, relevant. Average attendance numbers were not highly affected by games being day or night with similar means and variance but cloudy skies likely played a roll in attendance with numbers almost 10% lower than games played under clear skies.
+
+```{r}
+encode <- build_encoding(data, cols = c("skies", "day_night", "cap", "shirt", "fireworks", "bobblehead", "promo"), verbose = TRUE)
+enc_df <- subset(one_hot_encoder(data, encode, drop = TRUE, verbose = TRUE), select = -c(day))
+```
+```{r, warning = FALSE, message = FALSE}
+ggcorr(enc_df, hjust = 1, angle = "-45")
+```
+
+What we see here is that the strongest correlation to attendance is the bobblehead promotion but promotions in general also have a significant effect. If a promotion is to be run, however, the bobblehead should be the first choice. Day or night as expexted had little correlation to attendance and clear skies only a minor effect. 
+```{r, warning = FALSE, message = FALSE}
+data_dow <- data
+data_dow$day_of_week <- as.factor(as.character((data$day_of_week)))
+encode_dow <- build_encoding(data_dow, cols = c("day_of_week"), verbose = TRUE)
+enc_dow_df <- subset(one_hot_encoder(data, encode_dow, drop = TRUE, verbose = TRUE), select = -c(day, bobblehead, fireworks, cap, shirt))
+
+ggcorr(enc_dow_df, hjust = 1, angle = "-45")
+```
+
+We see here that Saturdays and Sundays do have a marginal effect on attendance but not as great as originally assumed. Tuesdays definitely have a strong correlation, but as we have seen this is most likely the cause of the bobblehead promotion. Temperature appears to hold more signifigance than the day of the week.
+
+```{r, warning = FALSE, message = FALSE}
+data_mon <- data
+data_mon$month <- as.factor(as.character((data$month)))
+encode_mon <- build_encoding(data_mon, cols = c("month"), verbose = TRUE)
+enc_mon_df <- subset(one_hot_encoder(data, encode_mon, drop = TRUE, verbose = TRUE), select = -c(day_of_week, day, bobblehead, fireworks, cap, shirt))
+
+ggcorr(enc_mon_df, hjust = 1, angle = "-45")
+```
+
+The month does have relevance. Summer months (while children are out of school) positively correlate stronger to attendance than school months. 
+
+### Training Data
+```{r}
+set.seed(1234)
+sample <- sample(nrow(data), size = floor(.85 * nrow(data)), replace = FALSE)
+train <- data[sample, ]
+test <- data[-sample, ]
+```
+```{r}
+fit <- lm(attend ~ day_of_week + month + bobblehead + skies, train)
+
+train$predicted <- predict(fit)
+train$residuals <- residuals(fit)
+
+summary(fit)
+```
+```{r, warning = FALSE}
+par(mfrow = c(2,2))
+plot(fit)
+```
+
+Here we encounter a problem. While it certainly appears the opponent has a significant role to play in attendance (which is shown at the bottom of the page), building a training set that could be called reliable with each opponent is difficult. Modelling using the entire dataset proved quite successful, but building a training set required too many observations leaving the test dataset wanting. Opponent was thus removed and analysis is pending.
+```{r}
+test$predicted <- predict(fit, newdata = test)
+
+cor <- cor(test$attend, test$predicted)^2
+```
+With 85% of the original dataset used in training, `r cor * 100`% of the test variance is accounted for.
+```{r}
+ggplot(test, aes(x = predicted, y = attend)) + 
+  geom_point() +
+  geom_smooth(method = "lm", se = FALSE)
+```
+
+With only one major outlier, the training set appears to have created a reasonable fit.
+```{r opponents}
+bar_opp <- ggplot(data, aes(x = opponent)) + geom_bar() + 
+  theme(axis.text.x = element_text(angle = 45, hjust = 1)) +
+  scale_y_continuous(breaks = c(3, 6, 9, 12))
+
+box_opp <- ggplot(data, aes(x = opponent, y = attend)) + geom_boxplot() + 
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+
+grid.arrange(bar_opp, box_opp)
+```
+
+Looking at the opponents data it's pretty clear some teams have more support than others. The Angels, Mets and Nationals, while only playing a few games, had very consistent attendance numbers while also remaining rather high. Other teams have very low numbers, such as the Braves, Brewers and Pirates. While both the Braves and Pirates were low, the Pirates' numbers were boosted by being the first home game of the year. 
+
+Due to teams only coming to town once or twice per year, this data might need to be collected season-over-season, but there is potential for strong correlation here.
+
+## Conclusion
+
+```{r}
+data_fit <- lm(attend ~ day_of_week + month + bobblehead + skies, data)
+data$predicted <- predict(data_fit)
+
+ggplot(data, aes(x = attend, y = predicted)) +
+  geom_point(aes(shape = bobblehead, colour = bobblehead)) +
+  geom_smooth(method = "lm", se = FALSE)
+```
+
+```{r}
+summary(data_fit)
+```
+
+```{r}
+anova(data_fit)
+```
+
+Running a bobblehead promotion increases attendance by `r as.character(round(data_fit$coefficients[14], 0))`. The low attendance rates on Mondays, especially in May, could be completely offset by running a bobblehead promotion on those days. 

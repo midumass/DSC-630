@@ -1,0 +1,192 @@
+---
+title: "Assignment_7.3"
+author: "Zach Hill"
+date: "October 12, 2019"
+output:
+  word_document: default
+  html_document: default
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+
+library(tidyverse)
+library(psych)
+library(anytime)
+library(plyr)
+library(corrr)
+
+```
+
+```{r data_load, eval= FALSE}
+dest <- read.csv('destinations.csv')
+test <- read.csv('test.csv')
+train <- read.csv('/Temp/train.csv')
+```
+
+```{r data_exploration, eval = FALSE}
+summary(dest)
+str(dest)
+
+head(dest)
+
+# This will be used to show if our predictions from the train dataset are correct
+summary(test)
+str(test)
+
+head(test)
+
+# Set date_time to POSIX datetime object instead of factor
+test$date_time <- anytime(test$date_time)
+
+# This is where we generate our predicted values
+summary(train)
+str(test)
+
+head(train)
+
+# Set date_time to POSIX datetime object instead of factor
+train$date_time <- anytime(train$date_time)
+
+# Take sample of training set to make work bearable.
+# We only want bookings because our test dataset only contains bookings
+booked <- subset(train, is_booking == 1)
+sam <- booked[sample(nrow(booked), 10000),]
+
+str(sam)
+
+# Exporting sample dataset for faster processing later
+write.csv(sam, './sample.csv')
+```
+
+```{r data_format}
+data <- read.csv('sample.csv')
+data$date_time <- anytime(data$date_time)
+data$srch_ci <- anytime(data$srch_ci)
+data$srch_co <- anytime(data$srch_co)
+
+# Create numeric date values based on date_time
+data$date_time <- as.numeric(data$date_time)
+data$srch_ci <- as.numeric(data$srch_ci)
+data$srch_co <- as.numeric(data$srch_co)
+
+# drop the X column, as imported from excel
+data <- subset(data, select = -c(X, cnt, is_booking))
+
+str(data)
+
+```
+
+```{r data_analysis}
+# Generate list of most commonly selected hotel clusters.
+hcf <- plyr::count(data, 'hotel_cluster')
+head(hcf[order(-hcf[,2]),], 10)
+
+# Create correlation dataframe for analysis
+rs <- correlate(data[sapply(data, is.numeric)])
+View(rs %>% select(rowname,hotel_cluster))
+
+# find any features with over 90 correlation
+over_90 <- function(x) any(x > .9, na.rm = TRUE)
+rs %>% select_if(over_90)
+```
+
+With dates changed to epoch based numerical values, correlation can be run to find any relatioships. Few, if any were. We may need to come back and reevaluate our features to find better correlations. For now, we'll investigate what we have.
+
+### Linear Regression
+
+```{r linear_regression}
+lm_model <- lm(data$hotel_cluster ~ ., data)
+lm_pred <- predict(lm_model, data, type = 'response')
+
+lm_model
+```
+
+```{r lm_plot}
+plot(lm_pred)
+```
+
+We see nothing linearly correlates with the hotel_clusters. Clearly another method would be better suited.
+
+### Machine Learning
+
+We will run 3-fold cross validation accross the sample, attempting to predict hotel cluster. 4 algorithms will be tested: Random Forest, CART, k-nearest neighbor and a neural network simulation. Hopefully one of these will fit to the nonlinear data. 
+
+```{r machine_learning, include=FALSE}
+library(splines)
+library(caret)
+library(randomForest)
+library(Metrics)
+library(neuralnet)
+```
+
+#### Random Forest
+
+```{r random_forest}
+control = trainControl(method = 'cv', number = 3)
+
+rf_model <- train(hotel_cluster ~ ., data, method = 'rf', na.action = na.omit, trControl = control)
+rf_pred <- predict(rf_model, data)
+
+rf_model
+```
+
+```{r rf_plot}
+plot(rf_pred)
+```
+
+Random Forest produced rather scattered results, with a mean accuracy of only about 47%. 
+
+#### CART
+
+```{r CART}
+cart_model <- train(hotel_cluster ~ ., data, method = 'rpart1SE', na.action = na.pass, trControl = control)
+cart_pred <- predict(cart_model, data)
+
+cart_model
+```
+
+```{r cart_plot}
+plot(cart_pred)
+
+```
+
+Again we see less than 50% predictive accuracy even using in-data observations.
+
+#### KNN
+
+```{r knn}
+
+knn_control = trainControl(method = 'cv', number = 3, classProbs = FALSE)
+
+knn_model <- train(hotel_cluster ~ ., data, method = 'knn', na.action = na.omit, trControl = control)
+knn_pred <- predict(knn_model, data)
+
+knn_model
+```
+
+```{r knn_plot}
+plot(knn_pred)
+```
+
+k-Nearest neighbor has the least variance so far but still not worth using. 
+
+#### Neural Network
+
+```{r nerual_network}
+nn_control = trainControl(method = 'cv', number = 3, classProbs = FALSE)
+
+nn_model <- train(hotel_cluster ~ ., data, method = 'neuralnet', na.action = na.omit, trControl = control)
+nn_pred <- predict(nn_model, data)
+
+nn_model
+```
+```{r nn_plot}
+plot(nn_pred)
+```
+
+The neural network simulations produced much the same as the other machine learning algorithms.
+
+### Review
+
+Linear regression showed zero success and the machine learning algorithms werent much better. This could be due to the dataset's features. So far we have only investigated a subset of the training dataset, increasing the number of observations might help but so too might inclusion of the destinations dataset. We may also wish to break down certain features from the training set such as date. Currently it shows raw dates but other factors such as duration of bookings, days of the week for the start and finish of the booking, and month might be relevant and worth investigating.  

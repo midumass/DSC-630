@@ -1,0 +1,250 @@
+---
+title: "Assignment_9.2"
+author: "Zach Hill"
+date: "October 26, 2019"
+output:
+  word_document: default
+  html_document: default
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+
+library(tidyverse)
+library(ggplot2)
+library(reshape2)
+library(tidyr)
+library(dataRetrieval)
+library(gridExtra)
+library(grid)
+library(ggmap)
+library(forecast)
+library(TTR)
+library(highcharter)
+```
+
+
+```{r}
+sL <- list(335335078351901,
+  335629078115406,
+  335629078115407,
+  335631078003604,
+  335631078003605,
+  335631078003606,
+  335849078054301,
+  354302081433201,
+  354302081433202,
+  355031081243202,
+  355031081243203,
+  354616081085101,
+  354616081085102,
+  354855078553201,
+  351121083545002,
+  355359080331701,
+  345051078012109,
+  352012081154301,
+  352012081154302,
+  361011079595401,
+  352315082484401,
+  353827076293001,
+  354126076314201,
+  353135080524201,
+  353135080524202,
+  353135080524203,
+  345809077301408,
+  354133082042201,
+  354133082042203,
+  351126079301401,
+  351132079275301,
+  355944079013401,
+  361829076163201,
+  353219077153801,
+  362231079410801,
+  354057080362601,
+  344520079281001,
+  344544079263701,
+  345812079313401,
+  351709082434101,
+  351808082374302,
+  345609080415102,
+  345609080415103,
+  353509078404102,
+  353833078493301,
+  354144078460102,
+  354315078300101,
+  354315078300103,
+  354359078403104,
+  354649078400701,
+  354649078400702,
+  354748078315901,
+  354818078234101,
+  355457078232701,
+  355635078385101,
+  355657078342601,
+  360352078414401,
+  354216076271201,
+  354418076463601,
+  351849078163901)
+```
+
+```{r}
+data <- dataRetrieval::readNWISgwl(sL, 
+                                   startDate = "1900-01-01", 
+                                   endDate = "2019-09-01")
+
+df <- data.frame(data$site_no, data$lev_dt, data$lev_va)
+
+attribs <- attr(data, 'siteInfo')
+bad_attribs <- attribs[((attribs$dec_lat_va > 33.681 & attribs$dec_lat_va < 34.342) &
+                         (attribs$dec_long_va > -78.767 & attribs$dec_long_va < -77.789)),]
+
+bad_site_list <- bad_attribs$site_no
+attribs <- attribs[!(attribs$site_no %in% bad_site_list),]
+site_list <- attribs$site_no
+df <- df[!(df$data.site_no %in% bad_site_list),]
+data <- data[!(data$site_no %in% bad_site_list),]
+  
+library(lubridate)
+
+# MonthYear column
+df <- mutate(df, MonthYear = paste(year(data.lev_dt),formatC(month(data.lev_dt), width = 2, flag = "0")))
+
+df <- mutate(df, YearDay = paste(year(data.lev_dt), 
+                                 formatC(month(data.lev_dt), width = 2, flag = "0"),
+                                 formatC(day(data.lev_dt), width = 2, flag = "0")))
+
+df <- mutate(df, Week = week(data.lev_dt))
+
+df <- mutate(df, Year = year(data.lev_dt))
+df$Year <- as.factor(df$Year)
+```
+
+
+```{r}
+
+count_list <- NULL
+
+for (site in site_list){
+  count_list <- c(count_list, nrow(subset(data, site_no == site)))
+  
+}
+
+attribs$site_count <- count_list
+
+top25 <- (lapply(count(df, data.site_no, sort = TRUE)[1:25,][1], as.character))$data.site_no
+
+ggplot(df[df$data.site_no %in% top25, ], aes(x = data.lev_dt, 
+                                             y = data.lev_va, 
+                                             group = data.site_no, 
+                                             colour = data.site_no)) + 
+  geom_line() + 
+  theme(legend.position = 'none')
+
+summary(df[,1:3])
+```
+
+
+
+
+
+```{r clean_delete_me}
+# # top25 <- append(top25, c("345609080415102", "345609080415103", "353509078404101", "353509078404102", "353833078493301", "354144078460101", "354144078460102", "354315078300101", "354315078300103", "354359078403104", "354649078400701", "354649078400702", "354748078315901", "354818078234101", "355457078232701", "355657078342601", "360352078414401"))
+# # # top25 <- top25[-(match(c('335631078003604'), top25))]
+# # top25 <- top25[-(match(c('335629078115407'), top25))]
+# # # top25 <- top25[-(match(c('335631078003605'), top25))]
+# # # top25 <- top25[-(match(c('335631078003606'), top25))]
+# # top25 <- top25[-(match(c('335629078115406'), top25))]
+# 
+# ggplot(df[df$data.site_no %in% top25, ], aes(x = data.lev_dt, 
+#                                              y = data.lev_va, 
+#                                              group = data.site_no, 
+#                                              colour = data.site_no)) + 
+#   geom_line() + 
+#   theme(legend.position = 'none')
+
+```
+
+```{r maps}
+# register_google(key = 'AIzaSyCvvnczEV600J888oFybtq3QrDcHPlM030')
+
+map <- get_stamenmap(bbox = c(top = 37.2115,
+                             right = -75.5614,
+                             bottom = 32.9347,
+                             left = -86.0628),
+                     maptype = 'terrain',
+                     zoom = 7)
+
+ggmap(map) +
+  labs(x = "", y = "") +
+  geom_point(data = attribs, aes(x = dec_long_va,
+                                 y = dec_lat_va,
+                                 fill = "red",
+                                 alpha = 0.2),
+             colour = 'red',
+             size = 1,
+             shape = 19) +
+  theme(legend.position = 'none',
+        plot.background = element_blank())
+```
+
+
+
+
+```{r clean_map}
+ggmap(map) +
+  labs(x = "", y = "") +
+  geom_point(data = attribs[attribs$site_no %in% top25,], 
+             aes(x = dec_long_va,
+                 y = dec_lat_va),
+             colour = 'black',
+             shape = 19,
+             size = 2) +
+  theme(legend.position = 'none',
+  plot.background = element_blank())
+```
+
+```{r}
+df_months <- aggregate(df[df$data.site_no %in% top25, ]$data.lev_va, 
+                       by = list(df[df$data.site_no %in% top25, ]$MonthYear), 
+                       FUN = function(x) mean(x, na.rm = TRUE))
+
+dfts <- ts(df_months$x, frequency = 12, start = c(2000, 11), end = c(2019, 07))
+plot(dfts)
+```
+
+```{r}
+decomp_top25 <- decompose(dfts)
+plot(decomp_top25)
+```
+RUN REGRESSION ON SOME POINTS
+
+```{r}
+
+#ts1 <- data.frame(water_level = dfts, time = as.numeric(time(dfts)))
+ts1 <- data.frame(water_level = dfts, time = as.numeric(time(dfts)))
+tslm_model <- tslm(water_level ~ trend + season, ts1)
+plot(forecast(tslm_model, h = 60, level = c(80,95)))
+
+
+```
+```{r all}
+df_test <- df[!(df$data.site_no %in% top25), ]
+
+df_months_test <- aggregate(df_test$data.lev_va,
+                            by = list(df_test$MonthYear),
+                            FUN = function(x) mean(x, na.rm = TRUE))
+
+dfts2 <- ts(df_months$x, frequency = 12, start = c(2010, 11), end = c(2019, 07))
+
+dfts_test <- ts(df_months_test$x, start = c(2015,01), end = c(2019,07), frequency = 12)
+plot(dfts_test)
+
+dfts_test_forecasts <- HoltWinters(dfts_test)
+dfts_test_forecasts
+
+dfts2_forecasts <- HoltWinters(dfts2)
+dfts2_forecasts
+
+hchart(forecast(dfts_test_forecasts, h = 16))
+hchart(forecast(dfts2_forecasts, h = 16))
+```

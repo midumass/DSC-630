@@ -1,0 +1,198 @@
+---
+title: "Assignment_1.3_HillZach"
+author: "Zach Hill"
+date: "September 1, 2019"
+output:
+  word_document: default
+  pdf_document: default
+  html_document: default
+---
+
+## Importing Libraries
+
+```{r setup, warning=FALSE, results='hide', message=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+
+library(tidyverse)
+library(blscrapeR)
+library(dplyr)
+library(ggplot2)
+library(grid)
+library(gridExtra)
+library(scales)
+library(kableExtra)
+```
+
+## Loading Data
+
+```{r data, warning = FALSE}
+url <- 'https://download.bls.gov/pub/time.series/ap/ap.data.3.Food'
+data <- read.table(url, sep='\t', header = TRUE)
+data$value <- as.numeric(levels(data$value))[data$value]
+
+df1 <- spread(data, series_id, value)
+
+cols <- c('year',
+          'period',
+          'date',
+          Bread = 'APU0000702212    ',
+          Beef = 'APU0000703111    ',
+          Chicken = 'APU0000706111    ',
+          Eggs = 'APU0000708111    ',
+          Milk = 'APU0000709112    ',
+          Cheese = 'APU0000710211    ',
+          Apples = 'APU0000711111    ',
+          Oranges = 'APU0000711311    ')
+
+df2 <- dateCast(df1)
+df <- select(df2, cols)
+
+df_recent <- df %>% filter(dplyr::between(df$year, 2008, 2019))
+
+write.csv(df, 'bls_ap_food.csv')
+write.csv(df_recent, 'bls_ap_food_08-19.csv')
+```
+
+## Summary Statistics
+
+### Bread
+```{r summary_bread, warning = FALSE}
+summary(df_recent$Bread)
+```
+
+### Eggs
+```{r summary_eggs, warning = FALSE}
+mean(df_recent$Eggs, na.rm = TRUE)
+median(df_recent$Eggs, na.rm = TRUE)
+sd(df_recent$Eggs, na.rm = TRUE)
+quantile(df_recent$Eggs, probs = c(.25, .75), na.rm = TRUE)
+```
+
+## Plots
+
+### Time-Series Plot
+
+```{r plot, echo = FALSE, warning = FALSE}
+ggplot(df, aes(x = date)) +
+  geom_line(aes(y = Bread, colour = 'Bread')) +
+  geom_line(aes(y = Beef, colour = 'Beef')) +
+  geom_line(aes(y = Chicken, colour = 'Chicken')) +
+  geom_line(aes(y = Eggs, colour = 'Eggs')) +
+  geom_line(aes(y = Milk, colour = 'Milk')) +
+  geom_line(aes(y = Cheese, colour = 'Cheese')) +
+  geom_line(aes(y = Apples, colour = 'Apples')) +
+  geom_line(aes(y = Oranges, colour = 'Oranges')) +
+  labs(title = "Cost of Food Staples") +
+  xlab("Date") +
+  ylab("Price ($)") +
+  theme(legend.position = "top", 
+        plot.title = element_text(hjust = .5))
+```
+
+### Histogram and Boxplot
+
+```{r hist, echo = FALSE, warning = FALSE}
+hist <- ggplot(df_recent, aes(x = Apples)) +
+  geom_histogram(binwidth = .06,
+                 colour = "black",
+                 fill = "white") +
+  labs(title = "Avg. Cost of Apples 1980-Present") +
+  xlab("Price of Apples ($/lb)") +
+  geom_vline(aes(xintercept = mean(Apples, na.rm = TRUE)),
+             colour = "blue",
+             size = .5) +
+  geom_density(alpha = .2,
+               fill = '#FF6666') +
+  theme(legend.position = "top", 
+        plot.title = element_text(hjust = .5)) 
+
+box <- ggplot(df_recent, aes(x = year, y = Oranges, group = year)) +
+  geom_boxplot() +
+  labs(title = "Variability in Orange Prices") +
+  xlab("Year") +
+  ylab("Cost of Oranges ($/lb)") +
+  scale_x_continuous(breaks = c(2009, 2012, 2015, 2018)) +
+  theme(legend.position = "top", 
+        plot.title = element_text(hjust = .5)) 
+
+grid.arrange(hist, box, ncol = 2)
+```
+
+### Line with Linear Regression
+
+```{r linear, echo = FALSE, warning = FALSE}
+ggplot(df, aes(x = date, y = Beef)) +
+  geom_smooth(method = 'lm', colour = 'red') +
+  geom_line() +
+  labs(title = "Price of Ground Beef 1980-Present") +
+  xlab("Date") +
+  ylab("Cost of Beef ($/lb)") +
+  theme(legend.position = "top", 
+        plot.title = element_text(hjust = .5))  
+```
+
+### Scatter Plot with Correlation and Linear Regression
+
+```{r scatter, echo = FALSE, warning = FALSE}
+cor1 <- round(cor(df$Milk, df$Cheese, use = "complete.obs", method = "pearson"), 4)
+
+grob1 = grobTree(textGrob(paste("Pearson Correlation: ", cor1), x = 0.21, y = 0.95))
+
+#cov(df$Milk, df$Cheese, use = "complete.obs")
+lm1 <- lm(Beef ~ date, df)
+
+ggplot(df, aes(x = Milk, y = Cheese)) +
+  geom_point(aes(colour = year)) +
+  geom_smooth(method = lm, se = FALSE) +
+  labs(title = "Cost of Milk vs. Price of Cheese") +
+  annotation_custom(grob1) +
+  theme(plot.title = element_text(hjust = .5))
+
+```
+
+## Summary Report
+
+### Dataframe Structure
+
+```{r structure, warning = FALSE}
+str(df)
+```
+
+### Data Summary
+
+```{r summary, echo = FALSE, warning = FALSE}
+clean_sum <- round(do.call(cbind, lapply(df[4:11], summary)), 4)[1:6,]
+
+clean_sum %>% 
+  kable() %>% 
+  kable_styling(bootstrap_options = c("striped", "hover"))
+```
+
+## Reporting Findings
+
+The cost of living increases over time. This is inevitable as markets grow, currencies change relative values and wages increase. Food staples, foods that almost all people eat and are used in most diets should be a good indicator of how the cost of living has increased over the years. The Bureau of Labor and Statistics has kept track of these items with faily good regularity since 1980. These reports investigate how those food staples' prices have changed and prepares us to make predictions on how they will change in the future.
+
+#### Bread
+
+The average cost of a pound of whole wheat bread over the past 40 years is roughly $`r sprintf('%.2f', round(mean(df$Bread, na.rm = TRUE), 2))` per pound. Currently whole wheat bread costs $`r sprintf('%.2f', round(df$Bread[df$date == '2019-07-01'], 2))` per pound, an increase of $`r abs(round((mean(df$Bread, na.rm = TRUE) - df$Bread[df$date == '2019-07-01']), 2))` per pound over the mean. Since the recession, when prices tended to increase rapidly, however, the cost of bread has remained fairly flat with a difference of only $`r abs(round((mean(df_recent$Bread, na.rm = TRUE) - df$Bread[df$date == '2019-07-01']), 2))` per pound relative to the mean over the past 11 years.
+
+```{r beef, echo = FALSE}
+pred1 <- predict(lm1, df)
+df_beef <- as.data.frame(cbind(df$Beef, pred1))
+```
+
+#### Beef
+
+Beef has had steady increase since price first being recorded, one of the few foods whose costs was not affected by the recession. The current price of a pound of ground beef is slightly over the expected value predicted over the past 40 years at $`r sprintf('%.2f', round(tail(df_beef,1)[1], 2))`, a difference of $`r abs(round(tail(df_beef,1)[1] - tail(df_beef,1)[2], 2))`. While the price is slightly higher than expected, it is of far less significance than three years ago when beef was at its maximum of $`r sprintf('%.2f', round(max(df_beef$V1), 2))` and cost $`r sprintf('%.2f', abs(round((max(df_beef$V1) - df_beef$pred1[df_beef$V1 == max(df_beef)]), 2)))` more than expected.
+
+#### Milk and Cheese
+
+The correlation between the prices of milk and cheese is not surprising, but it should not be considered causal either. With a value of `r cor1` however, it is a very strong correlation.
+
+#### Apples and Oranges
+
+I just wanted to compare Apples and Oranges. Orange price variability is largely seasonal and varied year over year where apples tend to remain more stable. The notable gaps in the early data for these staple fruits is caused by a lack of distribution methods which could keep the fruits fresh; methods which have since been remedied as evidenced by the more consistent pricing index.
+
+#### Conclusions
+
+With the media constantly bombarding us with how bad the economy is, most would assume the average citizen was struggling to get by but it appears that this isn't quite correct. Food staples, at least, are flat or down in price since the recession, with sharp downturns in cost since 2016. These findings would indicate a drastic cost-of-living decrease on these necessities. This is not to be assumed to be an indicator that all costs are down as health care costs, insurance costs, housing costs, fuel costs and others might have increased or that wages had decreased over the past few years. Further study is needed but these findings, at least, make me feel more comfortable with our nation's economic situation.
