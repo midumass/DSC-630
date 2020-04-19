@@ -19,6 +19,7 @@ library(blscrapeR)
 library(dplyr)
 library(ggplot2)
 library(broom)
+library(gridExtra)
 
 # Items of interest
 # APU0000702212 - Whole Wheat Bread, lb
