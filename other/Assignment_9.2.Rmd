@@ -3,7 +3,6 @@ title: "Assignment_9.2"
 author: "Zach Hill"
 date: "October 26, 2019"
 output:
-  word_document: default
   html_document: default
 ---
 
