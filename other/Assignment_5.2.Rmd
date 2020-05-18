@@ -31,7 +31,7 @@ library(gridExtra)
 library(grid)
 library(ggmap)
 
-key <- 'AIzaSyCvvnczEV600J888oFybtq3QrDcHPlM030'
+key <- 'keyfile.txt'
 ```
 ```{r}
 
